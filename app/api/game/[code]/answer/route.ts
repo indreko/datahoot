@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
 import { getPusherServer } from '@/lib/pusher-server';
 import { calcPoints } from '@/lib/scoring';
+import { triggerEndQuestion } from '@/lib/end-question';
 
 type Params = { params: Promise<{ code: string }> };
 
@@ -67,10 +68,15 @@ export async function POST(req: NextRequest, { params }: Params) {
     .select('*', { count: 'exact', head: true })
     .eq('game_id', game.id);
 
-  await pusher.trigger(`game-${code}`, 'answer-count', {
-    answered: answeredCount ?? 0,
-    total: totalPlayers ?? 0,
-  });
+  const answered = answeredCount ?? 0;
+  const total = totalPlayers ?? 0;
+
+  await pusher.trigger(`game-${code}`, 'answer-count', { answered, total });
+
+  // Kõik vastasid — lõpeta küsimus automaatselt
+  if (total > 0 && answered >= total) {
+    await triggerEndQuestion(db, pusher, game.id, code, currentQuestion.id);
+  }
 
   return NextResponse.json({ points, isCorrect });
 }

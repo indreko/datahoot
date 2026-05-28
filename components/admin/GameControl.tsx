@@ -40,11 +40,12 @@ export default function GameControl({ game, quiz }: Props) {
     channel.bind('answer-count', (data: { answered: number; total: number }) => {
       setAnswered(data.answered);
       setTotal(data.total);
-      // Auto-end if everyone answered
-      if (data.answered >= data.total && data.total > 0) {
-        clearTimer();
-        handleEndQuestion();
-      }
+    });
+
+    channel.bind('question-end', () => {
+      // Server triggered end (all answered or admin pressed button)
+      clearTimer();
+      setPhase('results');
     });
 
     channel.bind('leaderboard', (data: { top5: { nickname: string; totalScore: number }[] }) => {
@@ -75,7 +76,7 @@ export default function GameControl({ game, quiz }: Props) {
       setTimeLeft(left);
       if (left === 0) {
         clearTimer();
-        handleEndQuestion();
+        void handleEndQuestion();
       }
     }, 250);
   }
@@ -109,8 +110,8 @@ export default function GameControl({ game, quiz }: Props) {
 
   async function handleEndQuestion() {
     if (phase !== 'question') return;
-    setPhase('results');
     clearTimer();
+    // phase transitions via 'question-end' Pusher event that server sends
     await fetch(`/api/games/${game.id}/end-question`, { method: 'POST' });
   }
 
